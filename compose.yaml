@@ -1,11 +1,45 @@
 version: '3.8'
-
 services:
+  db:
+    image: postgres:15
+    container_name: codebake-db
+    environment:
+      - POSTGRES_USER=springerp
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=springerp
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "springerp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  flyway:
+    image: flyway/flyway:latest
+    container_name: codebake-flyway
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./src/main/resources/db/migration:/flyway/sql
+    environment:
+      - FLYWAY_URL=jdbc:postgresql://db:5432/springerp
+      - FLYWAY_USER=springerp
+      - FLYWAY_PASSWORD=secret
+      - FLYWAY_BASELINE_ON_MIGRATE=true
+    command: -connectRetries=60 migrate
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: codebake-app
+    depends_on:
+      - db
+      - flyway
     ports:
       - "8080:8080"
     environment:
@@ -19,6 +53,5 @@ services:
       start_period: 40s
     restart: unless-stopped
 
-networks:
-  default:
-    name: codebake-network
+volumes:
+  db-data:
